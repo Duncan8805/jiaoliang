@@ -1,6 +1,6 @@
 // 交糧帳 service worker：讓系統離線也能打開
 // 每次改了 index.html 等檔案，要把 CACHE 的版本號加 1，平板才會更新
-const CACHE = 'jiaoliang-v3';
+const CACHE = 'jiaoliang-v4';
 const FILES = [
   './',
   'index.html',

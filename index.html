@@ -85,10 +85,26 @@
   .govcell b { font-size: 26px; }
   .shipline + .shipline { margin-top: 4px; }
   .msgs { margin-top: 10px; display: grid; gap: 4px; }
+  /* 觸控數字鍵盤 */
+  #keypad { display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; background: #e9e6df; border-top: 3px solid var(--accent);
+    padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); box-shadow: 0 -4px 16px rgba(0,0,0,.15); }
+  #keypad.on { display: block; }
+  #keypad .kpbar { display: flex; justify-content: space-between; align-items: center; max-width: 640px; margin: 0 auto 8px; font-size: 18px; color: var(--accent); }
+  #keypad .kpbar button { font: inherit; font-size: 16px; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+  #keypad .kpgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; max-width: 640px; margin: 0 auto; }
+  #keypad .kpgrid button { font: inherit; font-size: 30px; height: 62px; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--ink);
+    touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  #keypad .kpgrid button:active { background: var(--soft); }
+  #keypad .kpgrid button:disabled { opacity: .3; }
+  #keypad .kpgrid .k-fn { font-size: 22px; color: var(--warn); }
+  #keypad .kpgrid .k-next { grid-row: span 2; height: auto; background: var(--accent); color: #fff; font-size: 22px; font-weight: bold; white-space: nowrap; }
+  #keypad .kpgrid .k-zero { grid-column: span 2; }
+  input.kp-on { outline: 3px solid #e0a800; outline-offset: 1px; }
+  body.kp-open { padding-bottom: 330px; }
   #print { display: none; }
   @media print {
     body { background: #fff; font-size: 14px; }
-    header, main { display: none !important; }
+    header, main, #keypad { display: none !important; }
     #print { display: block; }
     @page { size: A5 landscape; margin: 8mm; }
   }
@@ -279,6 +295,16 @@
 
 <div id="print"></div>
 
+<div id="keypad">
+  <div class="kpbar"><b id="kpLabel"></b><button data-k="close">收起鍵盤 ▼</button></div>
+  <div class="kpgrid">
+    <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button><button data-k="back" class="k-fn">⌫</button>
+    <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button><button data-k="clear" class="k-fn">清除</button>
+    <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button><button data-k="next" class="k-next">下一格</button>
+    <button data-k="0" class="k-zero">0</button><button data-k=".">.</button>
+  </div>
+</div>
+
 <script>
 const KEY = 'gongliang-v2';
 const DEFAULTS = {
@@ -463,6 +489,7 @@ function renderShips() {
     <input data-si="${i}" data-sk="note" class="note" value="${esc(l.note)}" placeholder="註記">
     ${i ? `<button class="s d" data-sremove="${i}">移除</button>` : ''}
   </div>`).join('');
+  prepKeypad($('shipLines'));
 }
 
 // ---------- 開單 ----------
@@ -652,6 +679,7 @@ function renderMoist(rows) {
   $('moistBody').innerHTML = rows.map((r, i) => `<tr>
     ${r.map((v, j) => `<td><input data-mi="${i}" data-mj="${j}" type="number" inputmode="decimal" step="${j === 2 ? 0.01 : 1}" value="${v}" style="max-width:110px"></td>`).join('')}
     <td><button class="s d" data-mremove="${i}">移除</button></td></tr>`).join('');
+  prepKeypad($('moistBody'));
 }
 function collectMoist() {
   const rows = [];
@@ -707,6 +735,7 @@ function renderBackupInfo() {
 
 // ---------- 頁面切換 ----------
 function showTab(tab) {
+  kpClose();
   if (tab === 'settings' && db.settings.pin) {
     const p = prompt('請輸入後台密碼');
     if (p !== db.settings.pin) { if (p !== null) alert('密碼錯誤'); return; }
@@ -781,6 +810,79 @@ $('moistBody').addEventListener('click', e => {
 });
 $('btnBackup').onclick = backup;
 $('fileRestore').addEventListener('change', e => { if (e.target.files[0]) restore(e.target.files[0]); e.target.value = ''; });
+
+// ---------- 觸控數字鍵盤（iPad 沒有純數字鍵盤，所以自己做） ----------
+const TOUCH = matchMedia('(pointer: coarse)').matches;
+let kpInput = null;
+
+// 觸控裝置上，數字欄位改成不叫系統鍵盤（type=number 打不出「12.」，所以改成 text）
+function prepKeypad(root = document) {
+  if (!TOUCH) return;
+  root.querySelectorAll('input[type=number], input[type=tel]').forEach(el => {
+    el.dataset.int = el.type === 'tel' ? '1' : '';
+    el.type = 'text';
+    el.inputMode = 'none';
+    el.autocomplete = 'off';
+    el.classList.add('kp');
+  });
+}
+function kpLabel(el) {
+  const prev = el.previousElementSibling;
+  if (prev && (prev.classList.contains('tag') || prev.tagName === 'LABEL')) return prev.textContent;
+  const th = el.closest('tr') && el.closest('tr').querySelector('th');
+  return th ? th.textContent : '';
+}
+// 開單照填寫順序跳；其他欄位照畫面上的順序
+function kpNext(el) {
+  const order = matchMedia('(max-width: 820px)').matches
+    ? ['fMoist', 'fPlan', 'fGuide', 'fGross', 'fTare', 'fBuyPrice']
+    : ['fGross', 'fTare', 'fMoist', 'fPlan', 'fGuide', 'fBuyPrice'];
+  const i = order.indexOf(el.id);
+  if (i >= 0) return i + 1 < order.length ? $(order[i + 1]) : null;
+  const all = [...el.closest('section').querySelectorAll('input.kp')].filter(x => x.offsetParent && !x.readOnly);
+  return all[all.indexOf(el) + 1] || null;
+}
+function kpOpen(el) {
+  if (kpInput) kpInput.classList.remove('kp-on');
+  kpInput = el;
+  el.classList.add('kp-on');
+  $('kpLabel').textContent = kpLabel(el);
+  $('keypad').querySelector('[data-k="."]').disabled = !!el.dataset.int;
+  $('keypad').querySelector('[data-k="next"]').textContent = kpNext(el) ? '下一格' : '完成';
+  $('keypad').classList.add('on');
+  document.body.classList.add('kp-open');
+  setTimeout(() => el.scrollIntoView({ block: 'center', behavior: 'smooth' }), 50);
+}
+function kpClose() {
+  if (!kpInput) return;
+  const el = kpInput;
+  kpInput = null;
+  el.classList.remove('kp-on');
+  $('keypad').classList.remove('on');
+  document.body.classList.remove('kp-open');
+  el.blur();
+}
+// 用 pointerdown 並取消預設動作，按鍵時輸入框才不會失去焦點
+$('keypad').addEventListener('pointerdown', e => {
+  e.preventDefault();
+  const b = e.target.closest('button');
+  if (!b || b.disabled || !kpInput) return;
+  const k = b.dataset.k, el = kpInput;
+  if (k === 'close') return kpClose();
+  if (k === 'next') { const n = kpNext(el); return n ? n.focus() : kpClose(); }
+  let v = el.value;
+  if (k === 'back') v = v.slice(0, -1);
+  else if (k === 'clear') v = '';
+  else if (k === '.') { if (!v.includes('.')) v = (v || '0') + '.'; }
+  else v += k;
+  el.value = v;
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+});
+document.addEventListener('focusin', e => { if (TOUCH && e.target.matches('input.kp')) kpOpen(e.target); });
+document.addEventListener('focusout', e => {
+  if (e.target === kpInput) setTimeout(() => { if (!document.activeElement || !document.activeElement.matches('input.kp')) kpClose(); }, 0);
+});
+prepKeypad();
 
 applyHeader();
 resetForm();
