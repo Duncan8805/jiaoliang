@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>交糧帳</title>
+<meta name="theme-color" content="#2f6b3a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="交糧帳">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<style>
+  :root {
+    --bg: #f5f3ee; --card: #fff; --ink: #222; --muted: #6b6b6b; --line: #d9d4c7;
+    --accent: #2f6b3a; --accent-ink: #fff; --warn: #b3261e; --soft: #eef4ec; --slip: #fdf3f5; --slip-line: #c9a9b0;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 18px/1.5 "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif; }
+  header { background: var(--accent); color: var(--accent-ink); padding: 10px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+  header h1 { margin: 0; font-size: 22px; }
+  header .period { font-size: 15px; opacity: .9; }
+  nav { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
+  nav button { background: transparent; color: var(--accent-ink); border: 1px solid rgba(255,255,255,.5); border-radius: 6px; padding: 6px 14px; font-size: 17px; cursor: pointer; }
+  nav button.on { background: #fff; color: var(--accent); font-weight: bold; }
+  main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+  section { display: none; }
+  section.on { display: block; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .card h2 { margin: 0 0 12px; font-size: 19px; color: var(--accent); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+  label { display: block; font-size: 15px; color: var(--muted); }
+  input, select { width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--ink); }
+  input:focus, select:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+  input[readonly] { background: #f3f3f0; }
+  input[type=checkbox] { width: 22px; height: 22px; vertical-align: middle; }
+  .hint { font-size: 14px; color: var(--muted); }
+  .warn { color: var(--warn); font-weight: bold; }
+  .btns { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  button.b { font: inherit; padding: 10px 20px; border-radius: 8px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
+  button.p { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: bold; }
+  button.d { color: var(--warn); }
+  button.s { font-size: 15px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  th { background: var(--soft); font-size: 15px; }
+  td.l, th.l { text-align: left; }
+  .scroll { overflow-x: auto; }
+
+  /* 開單：照紙本傳票排 */
+  .slipform { background: var(--slip); border-color: var(--slip-line); }
+  .sfhead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; margin-bottom: 10px; }
+  .sfhead h2 { margin: 0; font-size: 22px; letter-spacing: 2px; }
+  .sfhead .meta { display: flex; align-items: center; gap: 6px; font-size: 16px; }
+  .sfhead .meta input { width: auto; }
+  .cols { display: grid; grid-template-columns: minmax(280px, 2fr) 3fr; border: 2px solid #555; background: #fff; }
+  .ftab tr.mOnly { display: none; }
+  /* 手機：姓名 → 電話…備註 → 總重…扣袋費 → 應付 */
+  @media (max-width: 820px) {
+    .cols { display: flex; flex-direction: column; }
+    .ftab, .ftab tbody { display: contents; }
+    .ftab tr, .ftab tr.mOnly { display: grid; grid-template-columns: 108px 1fr; order: var(--m); }
+    .cols .ftab th, .cols .ftab td { display: block; width: auto; height: auto; min-height: 50px; padding: 8px; }
+    .cols .ftab th { display: flex; align-items: center; }
+    .cols .ftab td.govcell { display: none; }
+  }
+  .ftab { border-collapse: collapse; }
+  .ftab th, .ftab td { border: 1px solid #999; padding: 4px 8px; height: 50px; text-align: left; white-space: normal; }
+  .ftab th { width: 108px; background: var(--slip); font-size: 17px; font-weight: bold; letter-spacing: 1px; }
+  .ftab td.v { font-size: 20px; font-weight: bold; text-align: right; }
+  .ftab td.v small { font-size: 14px; font-weight: normal; color: var(--muted); }
+  .ftab tr.pay td.v { font-size: 26px; color: var(--accent); }
+  .ftab input { padding: 5px 8px; }
+  .inl { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+  .inl input { width: 110px; }
+  .inl input.w { width: 150px; }
+  .inl input.note { width: 160px; }
+  .inl b { font-size: 19px; min-width: 70px; display: inline-block; text-align: right; }
+  .inl .tag { font-size: 15px; color: var(--muted); }
+  .inl label { white-space: nowrap; }
+  .ftab td.govcell { width: 32%; text-align: center; vertical-align: middle; }
+  .govcell .tag { display: block; font-size: 15px; color: var(--muted); }
+  .govcell b { font-size: 26px; }
+  .shipline + .shipline { margin-top: 4px; }
+  .msgs { margin-top: 10px; display: grid; gap: 4px; }
+  #print { display: none; }
+  @media print {
+    body { background: #fff; font-size: 14px; }
+    header, main { display: none !important; }
+    #print { display: block; }
+    @page { size: A5 landscape; margin: 8mm; }
+  }
+  .slip { font-family: "DFKai-SB", "BiauKai", "Microsoft JhengHei", serif; }
+  .slip h3 { text-align: center; margin: 0 0 4px; font-size: 22px; letter-spacing: 4px; }
+  .slip .meta { display: flex; justify-content: space-between; margin-bottom: 6px; }
+  .slip table td { border: 1px solid #000; padding: 3px 6px; text-align: left; white-space: normal; }
+  .slip table td.k { width: 12%; }
+  .slip table td.v { width: 16%; text-align: right; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="hTitle">交糧帳</h1>
+  <span class="period" id="hPeriod"></span>
+  <nav>
+    <button data-tab="entry" class="on">過磅開單</button>
+    <button data-tab="records">紀錄查詢</button>
+    <button data-tab="farmers">農民資料</button>
+    <button data-tab="settings">後台設定</button>
+  </nav>
+</header>
+
+<main>
+  <!-- 過磅開單 -->
+  <section id="entry" class="on">
+    <div class="card slipform">
+      <div class="sfhead">
+        <h2 id="entryTitle">進出貨地磅傳票</h2>
+        <span class="meta">No <input id="fNo" readonly size="7"></span>
+        <span class="meta">日期 <input id="fDate" type="date"></span>
+      </div>
+      <datalist id="farmerList"></datalist>
+      <div class="cols">
+        <table class="ftab">
+          <tr style="--m:1"><th>姓名</th><td><input id="fName" list="farmerList" autocomplete="off"></td></tr>
+          <tr style="--m:20"><th>總重</th><td><input id="fGross" type="number" inputmode="decimal"></td></tr>
+          <tr style="--m:21"><th>空車</th><td><input id="fTare" type="number" inputmode="decimal"></td></tr>
+          <tr style="--m:22"><th>貨實重</th><td class="v" id="oNet"></td></tr>
+          <tr style="--m:23"><th>扣農會濕谷</th><td class="v" id="oPubWet"></td></tr>
+          <tr style="--m:24"><th>實重</th><td class="v" id="oBuyKg"></td></tr>
+          <tr style="--m:25"><th>台斤</th><td class="v" id="oTaijin"></td></tr>
+          <tr style="--m:26"><th>單價</th><td><input id="fBuyPrice" type="number" inputmode="decimal" step="0.01"></td></tr>
+          <tr style="--m:27"><th>金額</th><td class="v" id="oBuyAmt"></td></tr>
+          <tr style="--m:28"><th>扣烘乾費</th><td class="v" id="oDryFee"></td></tr>
+          <tr style="--m:29"><th>扣袋費</th><td class="v" id="oBagFee"></td></tr>
+          <tr style="--m:40" class="pay"><th>應付</th><td class="v" id="oPay"></td></tr>
+        </table>
+        <table class="ftab">
+          <tr style="--m:2"><th>電話</th><td colspan="2"><div class="inl">
+            <input id="fPhone" class="w">
+            <span class="tag">村別</span><input id="fVillage">
+            <span class="tag">濕度</span><input id="fMoist" type="number" inputmode="decimal" step="0.1" style="width:80px">
+          </div></td></tr>
+          <tr style="--m:3"><th>計劃</th><td><div class="inl">
+            <input id="fPlan" type="number" inputmode="decimal" placeholder="乾穀 kg"> × <span id="oPriceA"></span> = <b id="oGovA"></b>
+          </div></td>
+          <td rowspan="2" class="govcell"><span class="tag">公糧款</span><b id="oGov"></b></td></tr>
+          <tr style="--m:4"><th>輔導</th><td><div class="inl">
+            <input id="fGuide" type="number" inputmode="decimal" placeholder="乾穀 kg"> × <span id="oPriceB"></span> = <b id="oGovB"></b>
+          </div></td></tr>
+          <tr class="mOnly" style="--m:5"><th>公糧款</th><td class="v" id="oGovM"></td></tr>
+          <tr style="--m:6"><th>農會乾谷</th><td colspan="2"><div class="inl">
+            <span id="oDry"></span> × <span id="oBagRate"></span> = <b id="oBagAmt"></b> <span class="tag">袋費</span>
+            <label style="color:var(--ink);font-size:17px;margin-left:8px"><input type="checkbox" id="fBag"> 扣袋費</label>
+          </div></td></tr>
+          <tr style="--m:7"><th>運費</th><td colspan="2">
+            <div id="shipLines"></div>
+          </td></tr>
+          <tr style="--m:8"><th>折濕谷</th><td colspan="2">
+            <div class="inl" style="margin-bottom:4px"><span class="tag">折算率</span><input id="fRate" type="number" inputmode="decimal" step="0.1" style="width:130px" placeholder="填濕度自動帶"> %</div>
+            <div class="inl">
+            <span id="oPubWet2"></span> × <input id="fDryFee" type="number" inputmode="decimal" step="0.01" style="width:130px" placeholder="填濕度自動帶"> = <b id="oDryFee2"></b> <span class="tag">烘乾費</span>
+          </div></td></tr>
+          <tr style="--m:9"><th>備註</th><td colspan="2"><input id="fNote"></td></tr>
+        </table>
+      </div>
+      <div class="msgs">
+        <div id="quotaInfo" class="hint"></div>
+        <div id="rateHint" class="hint"></div>
+        <div id="pubHint" class="hint"></div>
+        <div id="splitWarn" class="warn"></div>
+      </div>
+      <div class="btns">
+        <button class="b p" id="btnSavePrint">儲存並列印</button>
+        <button class="b" id="btnSave">只儲存</button>
+        <button class="b" id="btnClear">清除 / 新單</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 紀錄查詢 -->
+  <section id="records">
+    <div class="card">
+      <h2>查詢條件</h2>
+      <div class="grid">
+        <div><label>起日</label><input id="qFrom" type="date"></div>
+        <div><label>迄日</label><input id="qTo" type="date"></div>
+        <div><label>姓名（含關鍵字）</label><input id="qName"></div>
+        <div><label>期別</label><select id="qPeriod"></select></div>      </div>
+      <div class="btns">
+        <button class="b" id="btnToday">今天</button>
+        <button class="b" id="btnAll">全部</button>
+        <button class="b" id="btnCsv">匯出 Excel (CSV)</button>
+      </div>
+    </div>
+    <div class="card scroll">
+      <table>
+        <thead><tr>
+          <th>單號</th><th class="l">日期</th><th class="l">姓名</th><th>貨實重</th><th>濕度</th>
+          <th>計畫</th><th>輔導</th><th>公糧款</th><th>收購台斤</th><th>收購金額</th><th>烘乾費</th><th>袋費</th><th>應付</th><th>運費</th><th></th>
+        </tr></thead>
+        <tbody id="recBody"></tbody>
+        <tfoot id="recFoot"></tfoot>
+      </table>
+    </div>
+  </section>
+
+  <!-- 農民資料 -->
+  <section id="farmers">
+    <div class="card">
+      <h2>新增 / 修改農民</h2>
+      <div class="grid">
+        <div><label>姓名</label><input id="mName"></div>
+        <div><label>電話</label><input id="mPhone"></div>
+        <div><label>村別</label><input id="mVillage"></div>
+        <div><label>計畫額度 (乾穀 kg / 本期)</label><input id="mQA" type="number" inputmode="decimal"></div>
+        <div><label>輔導額度 (乾穀 kg / 本期)</label><input id="mQB" type="number" inputmode="decimal"></div>
+      </div>
+      <div class="hint" style="margin-top:6px">額度只是參考：開單時會顯示本期還剩多少，超過會提醒。可以留空。</div>
+      <div class="btns"><button class="b p" id="btnFarmerSave">儲存農民</button></div>
+    </div>
+    <div class="card scroll">
+      <table>
+        <thead><tr><th class="l">姓名</th><th class="l">電話</th><th class="l">村別</th>
+          <th>計畫額度</th><th>已交計畫</th><th>輔導額度</th><th>已交輔導</th><th></th></tr></thead>
+        <tbody id="farmerBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 後台設定 -->
+  <section id="settings">
+    <div class="card">
+      <h2>基本</h2>
+      <div class="grid">
+        <div><label>工廠名稱（印在傳票上）</label><input id="sFactory"></div>
+        <div><label>目前期別</label><input id="sPeriod" placeholder="例：115年二期"></div>
+        <div><label>後台密碼（留空 = 不設）</label><input id="sPin" type="password" autocomplete="new-password"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>價格與費率</h2>
+      <div class="grid">
+        <div><label>計畫收購 (元/kg乾穀)</label><input id="sPriceA" type="number" step="0.01" inputmode="decimal"></div>
+        <div><label>輔導收購 (元/kg乾穀)</label><input id="sPriceB" type="number" step="0.01" inputmode="decimal"></div>
+        <div><label>袋費 (元/kg乾穀)</label><input id="sBagRate" type="number" step="0.001" inputmode="decimal"></div>
+        <div><label>運費 (元/kg乾穀)</label><input id="sShipRate" type="number" step="0.001" inputmode="decimal"></div>
+        <div><label>工廠收購預設單價 (元/台斤)</label><input id="sBuyPrice" type="number" step="0.01" inputmode="decimal"></div>
+      </div>
+      <div class="hint" style="margin-top:6px">改價格只影響之後開的單；舊單保留當時的價格。</div>
+    </div>
+    <div class="card">
+      <h2>濕穀折算表</h2>
+      <p class="hint" style="margin-top:0">農會乾穀 = 濕穀 × 折算率。濕度有小數時四捨五入到整數再查表（26.4 → 26、26.5 → 27）；查不到時開單畫面要自己填。</p>
+      <div class="scroll">
+        <table style="max-width:520px">
+          <thead><tr><th>含水率 (%)</th><th>折算率 (%)</th><th>烘乾費 (元/kg濕穀)</th><th></th></tr></thead>
+          <tbody id="moistBody"></tbody>
+        </table>
+      </div>
+      <div class="btns"><button class="b" id="btnMoistAdd">＋ 新增一列</button></div>
+    </div>
+    <div class="btns" style="margin-bottom:16px"><button class="b p" id="btnSettingsSave">儲存設定</button></div>
+    <div class="card">
+      <h2>資料備份</h2>
+      <p class="hint">資料只存在這台電腦的瀏覽器裡。清除瀏覽器資料、換電腦都會不見，請定期備份到隨身碟。</p>
+      <div class="btns">
+        <button class="b" id="btnBackup">下載備份檔</button>
+        <label class="b" style="display:inline-block;cursor:pointer;color:var(--ink);font-size:18px;border:1px solid var(--line);border-radius:8px;padding:10px 20px;background:#fff">
+          從備份還原<input type="file" id="fileRestore" accept=".json" style="display:none">
+        </label>
+      </div>
+      <div class="hint" id="backupInfo" style="margin-top:6px"></div>
+    </div>
+  </section>
+</main>
+
+<div id="print"></div>
+
+<script>
+const KEY = 'gongliang-v2';
+const DEFAULTS = {
+  factory: '長富', period: '115年二期', pin: '',
+  priceA: 28, priceB: 26.5, bagRate: 0.126, shipRate: 0.35, buyPrice: 10.8,
+  // [含水率, 折算率%, 烘乾費 元/kg濕穀]
+  moist: [
+    [24, 83, 1.9], [25, 82, 1.9], [26, 81, 1.9], [27, 80, 1.9], [28, 79, 1.9], [29, 78, 2.0],
+    [30, 76, 2.1], [31, 74, 2.3], [32, 72, 2.3], [33, 69, 2.4], [34, 67, 2.4], [35, 65, 2.4],
+  ],
+};
+const TAIJIN = 0.6; // 1 台斤 = 0.6 kg
+
+let db = load();
+let editingId = null;
+const touched = {};
+let ships = []; // 運費明細：{ kg, rate, note, auto }
+
+function load() {
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+  if (!d) {
+    // 沿用第一版的設定與農民資料（舊版傳票格式不同，不搬）
+    try {
+      const old = JSON.parse(localStorage.getItem('gongliang-v1'));
+      if (old) {
+        const s = old.settings || {};
+        d = { settings: { factory: s.factory, period: s.period, pin: s.pin, priceA: s.priceA, priceB: s.priceB }, farmers: old.farmers || [] };
+        for (const k in d.settings) if (d.settings[k] == null) delete d.settings[k];
+      }
+    } catch (e) {}
+  }
+  d = d || {};
+  return {
+    settings: Object.assign(structuredClone(DEFAULTS), d.settings || {}),
+    records: d.records || [],
+    farmers: d.farmers || [],
+    nextNo: d.nextNo || 1,
+    lastBackup: d.lastBackup || null,
+  };
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(db)); }
+  catch (e) { alert('儲存失敗！請立刻下載備份。\n' + e.message); }
+}
+
+const $ = id => document.getElementById(id);
+const num = v => { const n = parseFloat(v); return isFinite(n) ? n : 0; };
+const money = v => Math.floor(v + 1e-6); // 金額無條件捨去（照傳票：1204×1.9=2287.6 → 2287）
+const fmt = (n, d = 0) => Number(n || 0).toLocaleString('zh-TW', { minimumFractionDigits: d, maximumFractionDigits: d });
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const roc = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-'); return `${y - 1911}年${+m}月${+d}日`; };
+const padNo = n => String(n).padStart(6, '0');
+const hasQuota = q => q !== '' && q != null;
+const editingRec = () => editingId && db.records.find(r => r.id === editingId);
+const kgHtml = (n, unit = 'kg') => `${fmt(n)} <small>${unit}</small>`;
+// 舊紀錄只有一筆運費總額
+const shipLinesOf = r => r.shipLines || [{ kg: r.dry, rate: r.shipRate, amt: r.shipFee, note: '' }];
+
+// ---------- 計算 ----------
+function lookupMoist(m) {
+  return db.settings.moist.find(r => r[0] === Math.round(m));
+}
+
+function farmerUsage(name, period, excludeId) {
+  let a = 0, b = 0;
+  for (const r of db.records) {
+    if (r.name === name && r.period === period && r.id !== excludeId) { a += r.planKg; b += r.guideKg; }
+  }
+  return { a, b };
+}
+
+function compute() {
+  const s = db.settings;
+  const er = editingRec();
+  const priceA = er ? er.priceA : s.priceA, priceB = er ? er.priceB : s.priceB;
+  const bagRate = er ? er.bagRate : s.bagRate;
+  const period = er ? er.period : s.period;
+
+  const gross = num($('fGross').value), tare = num($('fTare').value);
+  const net = Math.max(0, gross - tare);
+  const moist = num($('fMoist').value);
+  const row = moist ? lookupMoist(moist) : null;
+  if (!touched.rate) $('fRate').value = row ? row[1] : '';
+  if (!touched.dryFee) $('fDryFee').value = row ? row[2] : '';
+  const rate = num($('fRate').value) / 100;
+  const dryFeeRate = num($('fDryFee').value);
+
+  // 計劃、輔導手動輸入（乾穀 kg）
+  const planKg = num($('fPlan').value), guideKg = num($('fGuide').value);
+  const dry = planKg + guideKg;
+  const maxDry = rate ? Math.round(net * rate) : 0;
+
+  // 扣農會濕谷 = 乾穀 ÷ 折算率（四捨五入；交滿整車就是整車）
+  const pubWet = !rate || !dry ? 0 : dry >= maxDry ? net : Math.min(net, Math.round(dry / rate));
+  const buyKg = net - pubWet;
+  const taijin = Math.round(buyKg / TAIJIN);
+  const buyPrice = num($('fBuyPrice').value);
+  const useBag = $('fBag').checked;
+
+  const buyAmt = money(taijin * buyPrice);
+  const dryFee = money(pubWet * dryFeeRate);
+  const bagAmt = money(dry * bagRate);
+  const bagFee = useBag ? bagAmt : 0;
+  const pay = buyAmt - dryFee - bagFee;
+
+  const govA = money(planKg * priceA), govB = money(guideKg * priceB);
+  const gov = govA + govB + bagFee;
+
+  // 運費：第一筆預設 = 農會乾谷，可改；可以多筆
+  if (ships[0] && ships[0].auto) {
+    ships[0].kg = dry || '';
+    const el = document.querySelector('#shipLines [data-si="0"][data-sk="kg"]');
+    if (el && document.activeElement !== el) el.value = ships[0].kg;
+  }
+  const shipLines = ships.map((l, i) => {
+    const amt = money(num(l.kg) * num(l.rate));
+    const out = $('shipAmt' + i);
+    if (out) out.textContent = fmt(amt);
+    return { kg: num(l.kg), rate: num(l.rate), amt, note: (l.note || '').trim() };
+  });
+  const shipFee = shipLines.reduce((t, l) => t + l.amt, 0);
+
+  // 畫面
+  $('oNet').innerHTML = kgHtml(net);
+  $('oPubWet').innerHTML = kgHtml(pubWet);
+  $('oPubWet2').textContent = fmt(pubWet);
+  $('oBuyKg').innerHTML = kgHtml(buyKg);
+  $('oTaijin').innerHTML = kgHtml(taijin, '台斤');
+  $('oBuyAmt').textContent = fmt(buyAmt);
+  $('oDryFee').textContent = fmt(dryFee);
+  $('oDryFee2').textContent = fmt(dryFee);
+  $('oBagFee').textContent = fmt(bagFee);
+  $('oPay').textContent = pay < 0 ? `農民應補 ${fmt(-pay)}` : fmt(pay);
+  $('oPriceA').textContent = priceA; $('oGovA').textContent = fmt(govA);
+  $('oPriceB').textContent = priceB; $('oGovB').textContent = fmt(govB);
+  $('oDry').textContent = fmt(dry); $('oBagRate').textContent = bagRate;
+  $('oBagAmt').textContent = useBag ? fmt(bagAmt) : '—';
+  $('oGov').textContent = $('oGovM').textContent = fmt(gov);
+
+  $('rateHint').innerHTML = !moist ? '' : row
+    ? `濕度 ${moist}% → 四捨五入 ${Math.round(moist)}% → 折算率 ${row[1]}%、烘乾費 ${row[2]} 元` + (touched.rate || touched.dryFee ? '　<b>（已手動修改）</b>' : '')
+    : `<span class="warn">折算表查不到濕度 ${Math.round(moist)}%，請自己填折算率和烘乾費（或到後台補表）</span>`;
+  $('pubHint').textContent = net && rate && dry
+    ? `農會乾谷 ${fmt(dry)} ÷ ${fmt(rate * 100)}% = 扣農會濕谷 ${fmt(pubWet)} kg` + (buyKg > 0 ? `，剩下 ${fmt(buyKg)} kg 由工廠收購` : '（整車交公糧）')
+    : '';
+  const name = $('fName').value.trim();
+  const farmer = db.farmers.find(f => f.name === name);
+  const used = name ? farmerUsage(name, period, editingId) : { a: 0, b: 0 };
+  const remA = farmer && hasQuota(farmer.quotaA) ? Math.max(0, farmer.quotaA - used.a) : null;
+  const remB = farmer && hasQuota(farmer.quotaB) ? Math.max(0, farmer.quotaB - used.b) : null;
+  let qi = '';
+  if (farmer) {
+    qi = `${esc(name)} 本期（${esc(period)}）已交：計畫 ${fmt(used.a)} kg、輔導 ${fmt(used.b)} kg`;
+    if (remA != null) qi += `　｜　計畫剩 <b>${fmt(remA)}</b> kg`;
+    if (remB != null) qi += `　輔導剩 <b>${fmt(remB)}</b> kg`;
+  } else if (name) {
+    qi = '新農民（儲存後會自動加到農民資料）';
+  }
+  $('quotaInfo').innerHTML = qi;
+  const warns = [];
+  if (dry && !rate) warns.push(moist ? '請填折算率，扣農會濕谷和應付才會正確' : '還沒填濕度！填了才會帶出折算率和烘乾費，扣農會濕谷和應付才會正確');
+  if (pubWet && !dryFeeRate) warns.push('烘乾費費率還沒填');
+  if (remA != null && planKg > remA) warns.push(`計畫超過額度 ${fmt(planKg - remA)} kg`);
+  if (remB != null && guideKg > remB) warns.push(`輔導超過額度 ${fmt(guideKg - remB)} kg`);
+  if (maxDry && dry > maxDry) warns.push(`計劃＋輔導 ${fmt(dry)} kg 超過這車能折的乾穀 ${fmt(net)} × ${fmt(rate * 100)}% = ${fmt(maxDry)} kg`);
+  if (ships.length > 1 && dry && shipLines.reduce((t, l) => t + l.kg, 0) !== dry) warns.push(`運費各筆公斤數合計 ${fmt(shipLines.reduce((t, l) => t + l.kg, 0))}，跟農會乾谷 ${fmt(dry)} 不一樣`);
+  $('splitWarn').textContent = warns.join('；');
+
+  return { gross, tare, net, moist, rate: num($('fRate').value), dryFeeRate, planKg, guideKg, dry, pubWet, buyKg, taijin, buyPrice, useBag,
+    buyAmt, dryFee, bagFee, pay, priceA, priceB, bagRate, govA, govB, gov, shipLines, shipFee };
+}
+
+// ---------- 運費明細 ----------
+function renderShips() {
+  $('shipLines').innerHTML = ships.map((l, i) => `<div class="inl shipline">
+    <input data-si="${i}" data-sk="kg" type="number" inputmode="decimal" value="${esc(l.kg)}" placeholder="kg"> ×
+    <input data-si="${i}" data-sk="rate" type="number" inputmode="decimal" step="0.001" value="${esc(l.rate)}" style="width:80px"> =
+    <b id="shipAmt${i}"></b>
+    <input data-si="${i}" data-sk="note" class="note" value="${esc(l.note)}" placeholder="註記">
+    ${i ? `<button class="s d" data-sremove="${i}">移除</button>` : ''}
+  </div>`).join('');
+}
+
+// ---------- 開單 ----------
+function resetForm() {
+  editingId = null;
+  for (const k in touched) delete touched[k];
+  for (const id of ['fName', 'fPhone', 'fVillage', 'fGross', 'fTare', 'fMoist', 'fRate', 'fDryFee', 'fPlan', 'fGuide', 'fNote']) $(id).value = '';
+  $('fBag').checked = false;
+  $('fBuyPrice').value = db.settings.buyPrice;
+  $('fDate').value = today();
+  $('fNo').value = padNo(db.nextNo);
+  $('entryTitle').textContent = `${db.settings.factory}進出貨地磅傳票`;
+  ships = [{ kg: '', rate: db.settings.shipRate, note: '', auto: true }];
+  renderShips();
+  compute();
+}
+
+function saveRecord(print) {
+  const name = $('fName').value.trim();
+  const c = compute();
+  if (!name) return alert('請填姓名');
+  if (c.net <= 0) return alert('總重要大於空車');
+  if (c.dry && !c.rate) return alert(c.moist ? '請填折算率' : '還沒填濕度');
+  if (c.pubWet && !c.dryFeeRate) return alert('請填烘乾費費率');
+  if (c.buyKg > 0 && !c.buyPrice) return alert('有剩下的濕穀要工廠收購，請填單價');
+
+  const base = Object.assign({
+    date: $('fDate').value || today(), name,
+    phone: $('fPhone').value.trim(), village: $('fVillage').value.trim(), note: $('fNote').value.trim(),
+  }, c);
+  let rec;
+  if (editingId) {
+    rec = editingRec();
+    Object.assign(rec, base, { updatedAt: new Date().toISOString() });
+  } else {
+    rec = Object.assign({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      no: padNo(db.nextNo++), period: db.settings.period, createdAt: new Date().toISOString() }, base);
+    db.records.push(rec);
+    if (c.buyPrice) db.settings.buyPrice = c.buyPrice; // 記住今天的收購價
+  }
+  let f = db.farmers.find(x => x.name === name);
+  if (!f) { f = { name, phone: '', village: '', quotaA: '', quotaB: '' }; db.farmers.push(f); }
+  if (rec.phone) f.phone = rec.phone;
+  if (rec.village) f.village = rec.village;
+  save();
+  if (print) printRecord(rec);
+  resetForm();
+  applyHeader();
+  refreshLists();
+}
+
+function editRecord(id) {
+  const r = db.records.find(x => x.id === id);
+  if (!r) return;
+  editingId = id;
+  Object.assign(touched, { rate: true, dryFee: true });
+  $('fNo').value = r.no; $('fDate').value = r.date; $('fName').value = r.name;
+  $('fPhone').value = r.phone; $('fVillage').value = r.village; $('fNote').value = r.note || '';
+  $('fGross').value = r.gross; $('fTare').value = r.tare; $('fMoist').value = r.moist || '';
+  $('fRate').value = r.rate; $('fDryFee').value = r.dryFeeRate;
+  $('fPlan').value = r.planKg || ''; $('fGuide').value = r.guideKg || '';
+  $('fBuyPrice').value = r.buyPrice; $('fBag').checked = r.useBag;
+  ships = shipLinesOf(r).map(l => ({ kg: l.kg, rate: l.rate, note: l.note, auto: false }));
+  renderShips();
+  $('entryTitle').textContent = `修改傳票 No ${r.no}（沿用當時的公糧價格）`;
+  showTab('entry');
+  compute();
+}
+
+function deleteRecord(id) {
+  const r = db.records.find(x => x.id === id);
+  if (!r || !confirm(`確定刪除 No ${r.no} ${r.name} 的傳票？刪除後無法復原。`)) return;
+  db.records = db.records.filter(x => x.id !== id);
+  save(); refreshLists();
+}
+
+// ---------- 列印（照原本傳票的格式） ----------
+function printRecord(r) {
+  const s = db.settings;
+  const ship = shipLinesOf(r).map(l => `${fmt(l.kg)} × ${l.rate} = ${fmt(l.amt)}　運費${l.note ? '（' + esc(l.note) + '）' : ''}`).join('<br>');
+  const rows = [
+    ['姓名', esc(r.name), '電話', `${esc(r.phone)}　村別：${esc(r.village)}　濕度：${r.moist || '-'}`],
+    ['總重', fmt(r.gross), '計劃', `${fmt(r.planKg)} × ${r.priceA} = ${fmt(r.govA)}`],
+    ['空車', fmt(r.tare), '輔導', `${fmt(r.guideKg)} × ${r.priceB} = ${fmt(r.govB)}`],
+    ['貨實重', fmt(r.net), '農會乾谷', r.useBag ? `${fmt(r.dry)} × ${r.bagRate} = ${fmt(r.bagFee)}　袋費` : `${fmt(r.dry)}`],
+    ['扣農會濕谷', fmt(r.pubWet), `${r.rate}%`, ship],
+    ['實重', fmt(r.buyKg), '折濕谷', `${fmt(r.pubWet)} × ${r.dryFeeRate} = ${fmt(r.dryFee)}　烘乾費`],
+    ['台斤', fmt(r.taijin), '公糧款', `${fmt(r.gov)}`],
+    ['單價', r.buyPrice, '', ''],
+    ['金額', fmt(r.buyAmt), '', ''],
+    ['扣烘乾費', fmt(r.dryFee), '', ''],
+    ['扣袋費', fmt(r.bagFee), '', ''],
+    ['應付', `<b>${r.pay < 0 ? '−' : ''}${fmt(Math.abs(r.pay))}</b>`, '', r.note ? '備註：' + esc(r.note) : ''],
+  ];
+  $('print').innerHTML = `<div class="slip">
+    <h3>${esc(s.factory)}進出貨地磅傳票</h3>
+    <div class="meta"><span>民國 ${roc(r.date)}</span><span>${esc(r.period)}</span><span>No ${r.no}</span></div>
+    <table>${rows.map(x => `<tr><td class="k">${x[0]}</td><td class="v">${x[1]}</td><td class="k">${x[2]}</td><td>${x[3]}</td></tr>`).join('')}</table>
+    <div class="meta" style="margin-top:14px"><span>經手人：＿＿＿＿＿＿</span><span>貨主簽收：＿＿＿＿＿＿</span></div>
+  </div>`;
+  setTimeout(() => window.print(), 50);
+}
+
+// ---------- 紀錄查詢 ----------
+function filteredRecords() {
+  const from = $('qFrom').value, to = $('qTo').value, q = $('qName').value.trim(), p = $('qPeriod').value;
+  return db.records.filter(r =>
+    (!from || r.date >= from) && (!to || r.date <= to) && (!q || r.name.includes(q)) && (!p || r.period === p)
+  ).sort((a, b) => b.no.localeCompare(a.no));
+}
+
+function renderRecords() {
+  const periods = [...new Set(db.records.map(r => r.period))];
+  const cur = $('qPeriod').value;
+  $('qPeriod').innerHTML = '<option value="">全部期別</option>' + periods.map(p => `<option ${p === cur ? 'selected' : ''}>${esc(p)}</option>`).join('');
+  const rows = filteredRecords();
+  const keys = ['net', 'planKg', 'guideKg', 'gov', 'taijin', 'buyAmt', 'dryFee', 'bagFee', 'pay', 'shipFee'];
+  const t = Object.fromEntries(keys.map(k => [k, 0]));
+  $('recBody').innerHTML = rows.map(r => {
+    keys.forEach(k => t[k] += r[k]);
+    const lines = shipLinesOf(r);
+    const shipTitle = lines.map(l => `${fmt(l.kg)}×${l.rate}=${fmt(l.amt)}${l.note ? ' ' + l.note : ''}`).join('\n');
+    return `<tr><td>${r.no}</td><td class="l">${r.date}</td><td class="l">${esc(r.name)}</td>
+      <td>${fmt(r.net)}</td><td>${r.moist || '-'}</td><td>${fmt(r.planKg)}</td><td>${fmt(r.guideKg)}</td><td>${fmt(r.gov)}</td>
+      <td>${fmt(r.taijin)}</td><td>${fmt(r.buyAmt)}</td><td>${fmt(r.dryFee)}</td><td>${fmt(r.bagFee)}</td>
+      <td${r.pay < 0 ? ' class="warn"' : ''}><b>${fmt(r.pay)}</b></td><td title="${esc(shipTitle)}">${fmt(r.shipFee)}${lines.length > 1 ? `<br><span class="hint">${lines.length} 筆</span>` : ''}</td>
+      <td class="l"><button class="s" data-print="${r.id}">列印</button> <button class="s" data-edit="${r.id}">修改</button> <button class="s d" data-del="${r.id}">刪除</button></td></tr>`;
+  }).join('') || '<tr><td colspan="15" class="l hint">沒有資料</td></tr>';
+  $('recFoot').innerHTML = rows.length ? `<tr><th class="l" colspan="3">合計 ${rows.length} 筆</th>
+    <th>${fmt(t.net)}</th><th></th><th>${fmt(t.planKg)}</th><th>${fmt(t.guideKg)}</th><th>${fmt(t.gov)}</th>
+    <th>${fmt(t.taijin)}</th><th>${fmt(t.buyAmt)}</th><th>${fmt(t.dryFee)}</th><th>${fmt(t.bagFee)}</th><th>${fmt(t.pay)}</th><th>${fmt(t.shipFee)}</th><th></th></tr>` : '';
+}
+
+function exportCsv() {
+  const rows = filteredRecords().reverse();
+  const cols = [
+    ['單號', 'no'], ['日期', 'date'], ['期別', 'period'], ['姓名', 'name'], ['電話', 'phone'], ['村別', 'village'],
+    ['總重', 'gross'], ['空車', 'tare'], ['貨實重', 'net'], ['濕度', 'moist'], ['折算率%', 'rate'],
+    ['計畫kg', 'planKg'], ['計畫單價', 'priceA'], ['計畫金額', 'govA'], ['輔導kg', 'guideKg'], ['輔導單價', 'priceB'], ['輔導金額', 'govB'],
+    ['農會乾穀', 'dry'], ['扣農會濕穀', 'pubWet'], ['公糧款(含袋費)', 'gov'],
+    ['實重', 'buyKg'], ['台斤', 'taijin'], ['單價', 'buyPrice'], ['金額', 'buyAmt'],
+    ['烘乾費率', 'dryFeeRate'], ['扣烘乾費', 'dryFee'], ['扣袋費', 'bagFee'], ['應付', 'pay'], ['運費', 'shipFee'],
+    ['運費明細', r => shipLinesOf(r).map(l => `${l.kg}×${l.rate}=${l.amt}${l.note ? '(' + l.note + ')' : ''}`).join('；')],
+    ['備註', 'note'],
+  ];
+  const lines = [cols.map(c => c[0]), ...rows.map(r => cols.map(c => typeof c[1] === 'function' ? c[1](r) : r[c[1]]))];
+  const csv = lines.map(l => l.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
+  download('﻿' + csv, `公糧紀錄_${today()}.csv`, 'text/csv');
+}
+
+// ---------- 農民 ----------
+function renderFarmers() {
+  const p = db.settings.period;
+  $('farmerList').innerHTML = db.farmers.map(f => `<option value="${esc(f.name)}">`).join('');
+  $('farmerBody').innerHTML = db.farmers.slice().sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant')).map(f => {
+    const u = farmerUsage(f.name, p);
+    const over = (q, used) => hasQuota(q) && used > q ? ' class="warn"' : '';
+    return `<tr><td class="l">${esc(f.name)}</td><td class="l">${esc(f.phone)}</td><td class="l">${esc(f.village)}</td>
+      <td>${hasQuota(f.quotaA) ? fmt(f.quotaA) : '-'}</td><td${over(f.quotaA, u.a)}>${fmt(u.a)}</td>
+      <td>${hasQuota(f.quotaB) ? fmt(f.quotaB) : '-'}</td><td${over(f.quotaB, u.b)}>${fmt(u.b)}</td>
+      <td class="l"><button class="s" data-fedit="${esc(f.name)}">修改</button> <button class="s d" data-fdel="${esc(f.name)}">刪除</button></td></tr>`;
+  }).join('') || '<tr><td colspan="8" class="l hint">尚無農民資料（開單時會自動建立）</td></tr>';
+}
+
+function saveFarmer() {
+  const name = $('mName').value.trim();
+  if (!name) return alert('請填姓名');
+  const qa = $('mQA').value === '' ? '' : num($('mQA').value);
+  const qb = $('mQB').value === '' ? '' : num($('mQB').value);
+  let f = db.farmers.find(x => x.name === name);
+  if (!f) { f = { name }; db.farmers.push(f); }
+  Object.assign(f, { phone: $('mPhone').value.trim(), village: $('mVillage').value.trim(), quotaA: qa, quotaB: qb });
+  save();
+  for (const id of ['mName', 'mPhone', 'mVillage', 'mQA', 'mQB']) $(id).value = '';
+  refreshLists();
+}
+
+// ---------- 設定 ----------
+function renderSettings() {
+  const s = db.settings;
+  $('sFactory').value = s.factory; $('sPeriod').value = s.period; $('sPin').value = s.pin;
+  $('sPriceA').value = s.priceA; $('sPriceB').value = s.priceB;
+  $('sBagRate').value = s.bagRate; $('sShipRate').value = s.shipRate; $('sBuyPrice').value = s.buyPrice;
+  renderMoist(s.moist);
+}
+function renderMoist(rows) {
+  $('moistBody').innerHTML = rows.map((r, i) => `<tr>
+    ${r.map((v, j) => `<td><input data-mi="${i}" data-mj="${j}" type="number" step="${j === 2 ? 0.01 : 1}" value="${v}" style="max-width:110px"></td>`).join('')}
+    <td><button class="s d" data-mremove="${i}">移除</button></td></tr>`).join('');
+}
+function collectMoist() {
+  const rows = [];
+  document.querySelectorAll('#moistBody [data-mi]').forEach(el => {
+    (rows[el.dataset.mi] ||= [])[el.dataset.mj] = num(el.value);
+  });
+  return rows;
+}
+
+function saveSettings() {
+  const s = db.settings;
+  const moist = collectMoist().filter(r => r[0]).sort((a, b) => a[0] - b[0]);
+  if (new Set(moist.map(r => r[0])).size !== moist.length) return alert('折算表有重複的含水率');
+  Object.assign(s, {
+    factory: $('sFactory').value.trim(), period: $('sPeriod').value.trim() || s.period, pin: $('sPin').value,
+    priceA: num($('sPriceA').value), priceB: num($('sPriceB').value),
+    bagRate: num($('sBagRate').value), shipRate: num($('sShipRate').value), buyPrice: num($('sBuyPrice').value), moist,
+  });
+  save(); applyHeader(); refreshLists(); renderSettings();
+  if (!editingId) resetForm();
+  alert('設定已儲存');
+}
+
+// ---------- 備份 ----------
+function download(text, filename, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function backup() {
+  db.lastBackup = new Date().toISOString(); save();
+  download(JSON.stringify(db, null, 1), `公糧備份_${today()}.json`, 'application/json');
+  renderBackupInfo();
+}
+function restore(file) {
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const d = JSON.parse(rd.result);
+      if (!Array.isArray(d.records)) throw new Error('格式不對');
+      if (!confirm(`備份檔有 ${d.records.length} 筆傳票。還原會覆蓋目前所有資料（目前 ${db.records.length} 筆），確定？`)) return;
+      localStorage.setItem(KEY, JSON.stringify(d));
+      db = load(); applyHeader(); resetForm(); refreshLists(); renderSettings();
+      alert('還原完成');
+    } catch (e) { alert('還原失敗：' + e.message); }
+  };
+  rd.readAsText(file);
+}
+function renderBackupInfo() {
+  $('backupInfo').textContent = `目前共 ${db.records.length} 筆傳票。上次備份：${db.lastBackup ? new Date(db.lastBackup).toLocaleString('zh-TW') : '從未備份'}`;
+}
+
+// ---------- 頁面切換 ----------
+function showTab(tab) {
+  if (tab === 'settings' && db.settings.pin) {
+    const p = prompt('請輸入後台密碼');
+    if (p !== db.settings.pin) { if (p !== null) alert('密碼錯誤'); return; }
+  }
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  document.querySelectorAll('main section').forEach(s => s.classList.toggle('on', s.id === tab));
+  if (tab === 'settings') { renderSettings(); renderBackupInfo(); }
+}
+function applyHeader() {
+  const s = db.settings;
+  $('hTitle').textContent = `${s.factory} 交糧帳`;
+  $('hPeriod').textContent = `目前期別：${s.period}　計畫 ${s.priceA}／輔導 ${s.priceB} 元`;
+}
+function refreshLists() { renderRecords(); renderFarmers(); }
+
+// ---------- 事件 ----------
+document.querySelector('nav').addEventListener('click', e => { if (e.target.dataset.tab) showTab(e.target.dataset.tab); });
+['fGross', 'fTare', 'fPlan', 'fGuide', 'fBuyPrice', 'fNote', 'fDate'].forEach(id => $(id).addEventListener('input', compute));
+$('fMoist').addEventListener('input', () => { touched.rate = touched.dryFee = false; compute(); });
+$('fBag').addEventListener('change', compute);
+for (const [id, k] of [['fRate', 'rate'], ['fDryFee', 'dryFee']]) {
+  $(id).addEventListener('input', () => { touched[k] = true; compute(); });
+}
+$('fName').addEventListener('input', () => {
+  const f = db.farmers.find(x => x.name === $('fName').value.trim());
+  if (f) { if (f.phone) $('fPhone').value = f.phone; if (f.village) $('fVillage').value = f.village; }
+  compute();
+});
+$('shipLines').addEventListener('input', e => {
+  const d = e.target.dataset;
+  if (d.si === undefined) return;
+  ships[d.si][d.sk] = e.target.value;
+  if (d.sk === 'kg') ships[d.si].auto = false;
+  compute();
+});
+$('shipLines').addEventListener('click', e => {
+  if (e.target.dataset.sremove !== undefined) { ships.splice(+e.target.dataset.sremove, 1); renderShips(); compute(); }
+});
+$('btnSave').onclick = () => saveRecord(false);
+$('btnSavePrint').onclick = () => saveRecord(true);
+$('btnClear').onclick = resetForm;
+
+['qFrom', 'qTo', 'qName', 'qPeriod'].forEach(id => $(id).addEventListener('input', renderRecords));
+$('btnToday').onclick = () => { $('qFrom').value = $('qTo').value = today(); renderRecords(); };
+$('btnAll').onclick = () => { $('qFrom').value = $('qTo').value = $('qName').value = $('qPeriod').value = ''; renderRecords(); };
+$('btnCsv').onclick = exportCsv;
+$('recBody').addEventListener('click', e => {
+  const d = e.target.dataset;
+  if (d.print) printRecord(db.records.find(r => r.id === d.print));
+  if (d.edit) editRecord(d.edit);
+  if (d.del) deleteRecord(d.del);
+});
+
+$('btnFarmerSave').onclick = saveFarmer;
+$('farmerBody').addEventListener('click', e => {
+  const d = e.target.dataset;
+  if (d.fedit) {
+    const f = db.farmers.find(x => x.name === d.fedit);
+    $('mName').value = f.name; $('mPhone').value = f.phone || ''; $('mVillage').value = f.village || '';
+    $('mQA').value = f.quotaA ?? ''; $('mQB').value = f.quotaB ?? '';
+    $('mName').focus();
+  }
+  if (d.fdel && confirm(`刪除農民「${d.fdel}」？（傳票紀錄不會被刪）`)) {
+    db.farmers = db.farmers.filter(x => x.name !== d.fdel); save(); renderFarmers();
+  }
+});
+
+$('btnSettingsSave').onclick = saveSettings;
+$('btnMoistAdd').onclick = () => { const rows = collectMoist(); rows.push([0, 0, 0]); renderMoist(rows); };
+$('moistBody').addEventListener('click', e => {
+  if (e.target.dataset.mremove !== undefined) { const rows = collectMoist(); rows.splice(+e.target.dataset.mremove, 1); renderMoist(rows); }
+});
+$('btnBackup').onclick = backup;
+$('fileRestore').addEventListener('change', e => { if (e.target.files[0]) restore(e.target.files[0]); e.target.value = ''; });
+
+applyHeader();
+resetForm();
+refreshLists();
+
+// 離線用：註冊 service worker（從檔案直接打開時不會註冊）
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').catch(e => console.warn('service worker 註冊失敗', e));
+}
+</script>
+</body>
+</html>
