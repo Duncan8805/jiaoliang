@@ -1,2 +1,6 @@
 # 舊檔名的副本（app 搬資料夾時會複製過來），系統本體是 index.html
 公糧過磅系統.html
+
+# graft 程式碼索引工具自動產生的檔案
+graft/
+.ignore
