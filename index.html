@@ -373,9 +373,10 @@ function compute() {
   const dry = planKg + guideKg;
   const maxDry = rate ? Math.round(net * rate) : 0;
 
-  // 扣農會濕谷 = 乾穀 ÷ 折算率（四捨五入；交滿整車就是整車）
-  const pubWet = !rate || !dry ? 0 : dry >= maxDry ? net : Math.min(net, Math.round(dry / rate));
-  const buyKg = net - pubWet;
+  // 扣農會濕谷 = 乾穀 ÷ 折算率（四捨五入；交滿整車就是整車；還沒過磅時照算，不受貨實重限制）
+  const wetNeed = rate && dry ? Math.round(dry / rate) : 0;
+  const pubWet = !net ? wetNeed : dry >= maxDry ? net : Math.min(net, wetNeed);
+  const buyKg = Math.max(0, net - pubWet);
   const taijin = Math.round(buyKg / TAIJIN);
   const buyPrice = num($('fBuyPrice').value);
   const useBag = $('fBag').checked;
