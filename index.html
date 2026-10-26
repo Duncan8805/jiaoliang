@@ -139,7 +139,7 @@
         </table>
         <table class="ftab">
           <tr style="--m:2"><th>電話</th><td colspan="2"><div class="inl">
-            <input id="fPhone" class="w">
+            <input id="fPhone" class="w" type="tel" inputmode="numeric" autocomplete="off">
             <span class="tag">村別</span><input id="fVillage">
             <span class="tag">濕度</span><input id="fMoist" type="number" inputmode="decimal" step="0.1" style="width:80px">
           </div></td></tr>
@@ -213,7 +213,7 @@
       <h2>新增 / 修改農民</h2>
       <div class="grid">
         <div><label>姓名</label><input id="mName"></div>
-        <div><label>電話</label><input id="mPhone"></div>
+        <div><label>電話</label><input id="mPhone" type="tel" inputmode="numeric" autocomplete="off"></div>
         <div><label>村別</label><input id="mVillage"></div>
         <div><label>計畫額度 (乾穀 kg / 本期)</label><input id="mQA" type="number" inputmode="decimal"></div>
         <div><label>輔導額度 (乾穀 kg / 本期)</label><input id="mQB" type="number" inputmode="decimal"></div>
@@ -650,7 +650,7 @@ function renderSettings() {
 }
 function renderMoist(rows) {
   $('moistBody').innerHTML = rows.map((r, i) => `<tr>
-    ${r.map((v, j) => `<td><input data-mi="${i}" data-mj="${j}" type="number" step="${j === 2 ? 0.01 : 1}" value="${v}" style="max-width:110px"></td>`).join('')}
+    ${r.map((v, j) => `<td><input data-mi="${i}" data-mj="${j}" type="number" inputmode="decimal" step="${j === 2 ? 0.01 : 1}" value="${v}" style="max-width:110px"></td>`).join('')}
     <td><button class="s d" data-mremove="${i}">移除</button></td></tr>`).join('');
 }
 function collectMoist() {
