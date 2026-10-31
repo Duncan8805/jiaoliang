@@ -36,6 +36,10 @@
   input:focus, select:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
   input[readonly] { background: #f3f3f0; }
   input[type=checkbox] { width: 22px; height: 22px; vertical-align: middle; }
+  /* iPad Safari 的日期欄有自己的最小寬度和高度，會撐出格子：改成跟其他欄位一樣 */
+  input[type=date] { -webkit-appearance: none; appearance: none; height: 2.5em; min-width: 0; }
+  input[type=date]::-webkit-date-and-time-value { text-align: left; }
+  .grid > * { min-width: 0; }
   .hint { font-size: 14px; color: var(--muted); }
   .warn { color: var(--warn); font-weight: bold; }
   .btns { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
