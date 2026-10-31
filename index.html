@@ -48,6 +48,10 @@
   th { background: var(--soft); font-size: 15px; }
   td.l, th.l { text-align: left; }
   .scroll { overflow-x: auto; }
+  header .sync { font: inherit; font-size: 14px; color: var(--accent-ink); background: rgba(255,255,255,.15); border: 0; border-radius: 12px; padding: 2px 10px; cursor: pointer; }
+  header .sync.off { opacity: .75; }
+  header .sync.err { background: #fff; color: var(--warn); font-weight: bold; }
+  .notice { background: #fff4e5; border: 1px solid #e0a040; border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; }
 
   /* 開單：照紙本傳票排 */
   .slipform { background: var(--slip); border-color: var(--slip-line); }
@@ -120,6 +124,7 @@
 <header>
   <h1 id="hTitle">交糧帳</h1>
   <span class="period" id="hPeriod"></span>
+  <button class="sync off" id="syncStatus"></button>
   <nav>
     <button data-tab="entry" class="on">過磅開單</button>
     <button data-tab="records">紀錄查詢</button>
@@ -129,6 +134,7 @@
 </header>
 
 <main>
+  <div id="syncNotice"></div>
   <!-- 過磅開單 -->
   <section id="entry" class="on">
     <div class="card slipform">
@@ -280,8 +286,23 @@
     </div>
     <div class="btns" style="margin-bottom:16px"><button class="b p" id="btnSettingsSave">儲存設定</button></div>
     <div class="card">
+      <h2>雲端同步</h2>
+      <p class="hint" style="margin-top:0">登入後，傳票、農民資料、設定會自動跟其他裝置同步。沒網路時照常開單，連上網路會自動補上傳。</p>
+      <div id="cloudOut">
+        <div class="grid">
+          <div><label>裝置代碼（例：A台、辦公室電腦）</label><input id="cDevice"></div>
+          <div><label>雲端密碼</label><input id="cPassword" type="password" autocomplete="current-password"></div>
+        </div>
+        <div class="btns"><button class="b p" id="btnLogin">登入</button></div>
+      </div>
+      <div id="cloudIn">
+        <div>已登入，這台裝置代碼：<b id="cDeviceShow"></b></div>
+        <div class="btns"><button class="b" id="btnSyncNow">立即同步</button><button class="b d" id="btnLogout">登出</button></div>
+      </div>
+    </div>
+    <div class="card">
       <h2>資料備份</h2>
-      <p class="hint">資料只存在這台電腦的瀏覽器裡。清除瀏覽器資料、換電腦都會不見，請定期備份到隨身碟。</p>
+      <p class="hint">資料存在這台裝置的瀏覽器裡；登入雲端同步後，雲端也會有一份。仍建議定期下載備份檔。</p>
       <div class="btns">
         <button class="b" id="btnBackup">下載備份檔</button>
         <label class="b" style="display:inline-block;cursor:pointer;color:var(--ink);font-size:18px;border:1px solid var(--line);border-radius:8px;padding:10px 20px;background:#fff">
@@ -523,18 +544,20 @@ function saveRecord(print) {
   let rec;
   if (editingId) {
     rec = editingRec();
+    if (!rec) { alert('這張傳票已經在其他裝置刪除了'); return resetForm(); }
     Object.assign(rec, base, { updatedAt: new Date().toISOString() });
   } else {
     rec = Object.assign({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       no: padNo(db.nextNo++), period: db.settings.period, createdAt: new Date().toISOString() }, base);
     db.records.push(rec);
-    if (c.buyPrice) db.settings.buyPrice = c.buyPrice; // 記住今天的收購價
+    if (c.buyPrice && c.buyPrice !== db.settings.buyPrice) { db.settings.buyPrice = c.buyPrice; queue('settings'); } // 記住今天的收購價
   }
   let f = db.farmers.find(x => x.name === name);
   if (!f) { f = { name, phone: '', village: '', quotaA: '', quotaB: '' }; db.farmers.push(f); }
   if (rec.phone) f.phone = rec.phone;
   if (rec.village) f.village = rec.village;
   save();
+  queue('record:' + rec.id, 'farmer:' + name);
   if (print) printRecord(rec);
   resetForm();
   applyHeader();
@@ -563,7 +586,7 @@ function deleteRecord(id) {
   const r = db.records.find(x => x.id === id);
   if (!r || !confirm(`確定刪除 No ${r.no} ${r.name} 的傳票？刪除後無法復原。`)) return;
   db.records = db.records.filter(x => x.id !== id);
-  save(); refreshLists();
+  save(); queue('record:' + id); refreshLists();
 }
 
 // ---------- 列印（照原本傳票的格式） ----------
@@ -662,7 +685,7 @@ function saveFarmer() {
   let f = db.farmers.find(x => x.name === name);
   if (!f) { f = { name }; db.farmers.push(f); }
   Object.assign(f, { phone: $('mPhone').value.trim(), village: $('mVillage').value.trim(), quotaA: qa, quotaB: qb });
-  save();
+  save(); queue('farmer:' + name);
   for (const id of ['mName', 'mPhone', 'mVillage', 'mQA', 'mQB']) $(id).value = '';
   refreshLists();
 }
@@ -698,7 +721,7 @@ function saveSettings() {
     priceA: num($('sPriceA').value), priceB: num($('sPriceB').value),
     bagRate: num($('sBagRate').value), shipRate: num($('sShipRate').value), buyPrice: num($('sBuyPrice').value), moist,
   });
-  save(); applyHeader(); refreshLists(); renderSettings();
+  save(); queue('settings'); applyHeader(); refreshLists(); renderSettings();
   if (!editingId) resetForm();
   alert('設定已儲存');
 }
@@ -721,9 +744,11 @@ function restore(file) {
     try {
       const d = JSON.parse(rd.result);
       if (!Array.isArray(d.records)) throw new Error('格式不對');
-      if (!confirm(`備份檔有 ${d.records.length} 筆傳票。還原會覆蓋目前所有資料（目前 ${db.records.length} 筆），確定？`)) return;
+      const cloud = sy.token ? '\n\n已登入雲端：備份裡的資料會上傳；雲端上備份沒有的傳票會再同步回來。' : '';
+      if (!confirm(`備份檔有 ${d.records.length} 筆傳票。還原會覆蓋目前所有資料（目前 ${db.records.length} 筆），確定？${cloud}`)) return;
       localStorage.setItem(KEY, JSON.stringify(d));
       db = load(); applyHeader(); resetForm(); refreshLists(); renderSettings();
+      if (sy.token) { sy.since = null; queueAll(); }
       alert('還原完成');
     } catch (e) { alert('還原失敗：' + e.message); }
   };
@@ -731,6 +756,173 @@ function restore(file) {
 }
 function renderBackupInfo() {
   $('backupInfo').textContent = `目前共 ${db.records.length} 筆傳票。上次備份：${db.lastBackup ? new Date(db.lastBackup).toLocaleString('zh-TW') : '從未備份'}`;
+}
+
+// ---------- 雲端同步 ----------
+// 本機永遠先存；有網路時把「待上傳清單」送到雲端，再拉回其他裝置的新資料。
+// 單號由雲端把關：撞號時後上傳的那張會被改成下一個空號，畫面上方提醒重印。
+const API = 'https://jiaoliang-api.duncancytseng.workers.dev';
+const SYNC_KEY = 'gongliang-sync'; // 登入狀態、裝置代碼、待上傳清單：只屬於這台裝置，不進備份檔
+let sy = loadSync();
+let syncing = false, syncAgain = false, syncErr = '';
+
+function loadSync() {
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(SYNC_KEY)); } catch (e) {}
+  return Object.assign({ token: null, device: '', since: null, outbox: [], renumbered: [] }, s || {});
+}
+function saveSync() {
+  try { localStorage.setItem(SYNC_KEY, JSON.stringify(sy)); } catch (e) {}
+}
+
+// 待上傳清單的項目：'record:<id>'、'farmer:<姓名>'、'settings'（刪除的也記，上傳時本機找不到就當刪除）
+function queue(...keys) {
+  for (const k of keys) if (!sy.outbox.includes(k)) sy.outbox.push(k);
+  saveSync();
+  renderSyncStatus();
+  if (sy.token) setTimeout(syncNow, 300);
+}
+function queueAll() {
+  queue('settings', ...db.farmers.map(f => 'farmer:' + f.name), ...db.records.map(r => 'record:' + r.id));
+}
+function pushItem(k) {
+  if (k === 'settings') return { kind: 'settings', data: db.settings };
+  const i = k.indexOf(':'), kind = k.slice(0, i), key = k.slice(i + 1);
+  if (kind === 'record') {
+    const r = db.records.find(x => x.id === key);
+    return r ? { kind, id: key, data: r } : { kind, id: key, deleted: true };
+  }
+  const f = db.farmers.find(x => x.name === key);
+  return f ? { kind, name: key, data: f } : { kind, name: key, deleted: true };
+}
+
+async function syncNow() {
+  if (!sy.token || !navigator.onLine) return renderSyncStatus();
+  if (syncing) { syncAgain = true; return; }
+  syncing = true; syncErr = '';
+  renderSyncStatus();
+  try {
+    // 雲端一次只處理一部分，清單長就多跑幾輪
+    for (let round = 0; round < 50; round++) {
+      const keys = sy.outbox.slice(0, 20);
+      const push = keys.map(pushItem);
+      const res = await fetch(API + '/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + sy.token },
+        body: JSON.stringify({ since: sy.since, device: sy.device, push }),
+      });
+      if (res.status === 401) { sy.token = null; saveSync(); syncErr = '雲端登入失效'; renderCloud(); break; }
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || res.status);
+      applySync(d, keys, push.map(p => JSON.stringify(p)));
+      if (!sy.outbox.length || !d.results.length) break;
+    }
+  } catch (e) {
+    console.warn('同步失敗', e);
+    if (navigator.onLine) syncErr = '同步失敗，稍後重試';
+  } finally {
+    syncing = false;
+    renderSyncStatus();
+    if (syncAgain) { syncAgain = false; syncNow(); }
+  }
+}
+
+function applySync(d, keys, sent) {
+  // 上傳成功、而且送出後沒再改過的，才從清單移除
+  const done = new Set(d.results.map(r => r.kind === 'settings' ? 'settings' : r.kind + ':' + (r.kind === 'record' ? r.id : r.name)));
+  keys.forEach((k, i) => { if (done.has(k) && JSON.stringify(pushItem(k)) === sent[i]) sy.outbox = sy.outbox.filter(x => x !== k); });
+
+  for (const r of d.results) {
+    const rec = r.kind === 'record' && r.no && db.records.find(x => x.id === r.id);
+    if (rec && rec.no !== r.no) {
+      sy.renumbered.push({ id: rec.id, from: rec.no, to: r.no, name: rec.name });
+      rec.no = r.no;
+    }
+  }
+
+  // 合併其他裝置的資料；本機還沒上傳的修改優先
+  const pending = new Set(sy.outbox);
+  for (const r of d.records) {
+    if (pending.has('record:' + r.id)) continue;
+    const i = db.records.findIndex(x => x.id === r.id);
+    const del = r.deleted; delete r.deleted;
+    if (del) { if (i >= 0) db.records.splice(i, 1); }
+    else if (i >= 0) db.records[i] = r;
+    else db.records.push(r);
+  }
+  for (const f of d.farmers) {
+    if (pending.has('farmer:' + f.name)) continue;
+    const i = db.farmers.findIndex(x => x.name === f.name);
+    const del = f.deleted; delete f.deleted;
+    if (del) { if (i >= 0) db.farmers.splice(i, 1); }
+    else if (i >= 0) db.farmers[i] = f;
+    else db.farmers.push(f);
+  }
+  if (d.settings && !pending.has('settings')) db.settings = Object.assign(structuredClone(DEFAULTS), d.settings);
+
+  const localMax = db.records.reduce((m, r) => Math.max(m, parseInt(r.no, 10) || 0), 0);
+  db.nextNo = Math.max(db.nextNo, localMax + 1, d.maxNo + 1);
+  sy.since = d.since;
+  save(); saveSync();
+
+  applyHeader(); refreshLists(); renderNotice();
+  if (!editingId) $('fNo').value = padNo(db.nextNo);
+}
+
+function renderSyncStatus() {
+  const n = sy.outbox.length;
+  let t, cls = '';
+  if (!sy.token) { t = syncErr ? syncErr + '，請重新登入' : '未連雲端'; cls = syncErr ? 'err' : 'off'; }
+  else if (!navigator.onLine) { t = '離線中' + (n ? `・${n} 筆待上傳` : ''); cls = 'off'; }
+  else if (syncErr) { t = syncErr; cls = 'err'; }
+  else if (syncing) t = '同步中…';
+  else if (n) t = `↑ ${n} 筆待上傳`;
+  else t = '✓ 已同步';
+  $('syncStatus').textContent = t;
+  $('syncStatus').className = 'sync ' + cls;
+}
+function renderNotice() {
+  $('syncNotice').innerHTML = sy.renumbered.map((x, i) => `<div class="notice">⚠ ${esc(x.name)} 的傳票 No ${x.from} 跟其他裝置撞號，已改成 <b>No ${x.to}</b>，請重印給農民。
+    <button class="s" data-rnprint="${i}">重印</button> <button class="s" data-rnok="${i}">知道了</button></div>`).join('');
+}
+function renderCloud() {
+  $('cloudOut').style.display = sy.token ? 'none' : '';
+  $('cloudIn').style.display = sy.token ? '' : 'none';
+  $('cDevice').value = sy.device;
+  $('cDeviceShow').textContent = sy.device;
+}
+
+async function login() {
+  const device = $('cDevice').value.trim(), password = $('cPassword').value;
+  if (!device) return alert('請填裝置代碼');
+  if (!password) return alert('請填雲端密碼');
+  let d;
+  try {
+    const res = await fetch(API + '/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
+    d = await res.json();
+    if (!res.ok) return alert(d.error || '登入失敗');
+  } catch (e) { return alert('連不到雲端，請確認網路'); }
+  Object.assign(sy, { token: d.token, device, since: null });
+  syncErr = '';
+  $('cPassword').value = '';
+  const n = db.records.length;
+  if (n || db.farmers.length) {
+    if (confirm(`這台裝置已經有 ${n} 筆傳票、${db.farmers.length} 位農民。\n\n第一台登入的「主要裝置」→ 按「確定」，把資料上傳到雲端。\n其他裝置 → 按「取消」，改用雲端上的資料。`)) queueAll();
+    else if (confirm(`改用雲端資料：會先把這台的 ${n} 筆傳票下載成備份檔，再從本機清除。確定？\n（按「取消」則保留本機資料，但不上傳）`)) {
+      backup();
+      db.records = []; db.farmers = []; db.nextNo = 1;
+      sy.outbox = [];
+      save();
+    }
+  }
+  saveSync(); renderCloud(); renderSyncStatus(); refreshLists();
+  syncNow();
+}
+function logout() {
+  const n = sy.outbox.length;
+  if (!confirm(n ? `還有 ${n} 筆沒上傳到雲端，登出後不會再上傳。確定登出？` : '確定登出雲端？')) return;
+  sy.token = null; sy.since = null; syncErr = '';
+  saveSync(); renderCloud(); renderSyncStatus();
 }
 
 // ---------- 頁面切換 ----------
@@ -799,7 +991,7 @@ $('farmerBody').addEventListener('click', e => {
     $('mName').focus();
   }
   if (d.fdel && confirm(`刪除農民「${d.fdel}」？（傳票紀錄不會被刪）`)) {
-    db.farmers = db.farmers.filter(x => x.name !== d.fdel); save(); renderFarmers();
+    db.farmers = db.farmers.filter(x => x.name !== d.fdel); save(); queue('farmer:' + d.fdel); renderFarmers();
   }
 });
 
@@ -810,6 +1002,20 @@ $('moistBody').addEventListener('click', e => {
 });
 $('btnBackup').onclick = backup;
 $('fileRestore').addEventListener('change', e => { if (e.target.files[0]) restore(e.target.files[0]); e.target.value = ''; });
+
+$('btnLogin').onclick = login;
+$('btnLogout').onclick = logout;
+$('btnSyncNow').onclick = syncNow;
+$('syncStatus').onclick = () => sy.token ? syncNow() : showTab('settings');
+$('syncNotice').addEventListener('click', e => {
+  const d = e.target.dataset;
+  if (d.rnprint !== undefined) printRecord(db.records.find(r => r.id === sy.renumbered[d.rnprint].id));
+  if (d.rnok !== undefined) { sy.renumbered.splice(+d.rnok, 1); saveSync(); renderNotice(); }
+});
+window.addEventListener('online', syncNow);
+window.addEventListener('offline', renderSyncStatus);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) syncNow(); });
+setInterval(() => { if (!document.hidden) syncNow(); }, 30000);
 
 // ---------- 觸控數字鍵盤（iPad 沒有純數字鍵盤，所以自己做） ----------
 const TOUCH = matchMedia('(pointer: coarse)').matches;
@@ -887,6 +1093,10 @@ prepKeypad();
 applyHeader();
 resetForm();
 refreshLists();
+renderCloud();
+renderNotice();
+renderSyncStatus();
+syncNow();
 
 // 離線用：註冊 service worker（從檔案直接打開時不會註冊）
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {

@@ -1,0 +1,12 @@
+name = "jiaoliang-api"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+# 允許哪些網頁呼叫這個 API（逗號分隔）
+ALLOWED_ORIGINS = "https://duncan8805.github.io,http://localhost:8080,http://127.0.0.1:8080"
+
+# 以下用 `npx wrangler secret put <名稱>` 設定，不寫在這裡：
+#   DATABASE_URL  TiDB 連線字串 mysql://user:pass@host/jiaoliang
+#   APP_PASSWORD  App 登入密碼（糧行共用一組）
+#   TOKEN_SECRET  簽登入憑證用的亂數字串；換掉它所有裝置都要重新登入
